@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>CivicCare — Report Issues</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Poppins:wght@600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+    <style>
+      :root{--bg1:#eefaf1;--bg2:#e6f6ea;--accent:#2f9d55;--muted:#64748b}
+      *{box-sizing:border-box}
+      body{margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial;background:linear-gradient(135deg,var(--bg1),var(--bg2));color:#07132a}
+      header{display:flex;justify-content:space-between;align-items:center;padding:14px 20px;background:rgba(255,255,255,0.7);backdrop-filter:blur(6px);border-bottom:1px solid rgba(0,0,0,0.04)}
+      .brand{display:flex;gap:12px;align-items:center;font-family:Poppins;font-weight:600}
+      .container{max-width:1100px;margin:26px auto;padding:0 18px;display:grid;grid-template-columns:1fr 420px;gap:20px}
+      .card{background:rgba(255,255,255,0.8);padding:16px;border-radius:12px;box-shadow:0 8px 30px rgba(2,6,23,0.06)}
+      h1{margin:0 0 6px 0;font-family:Poppins;font-size:20px}
+      p.lead{margin:0;color:var(--muted);font-size:13px}
+      label{display:block;font-size:13px;margin-bottom:6px;color:var(--muted)}
+      textarea{width:100%;min-height:88px;padding:10px;border-radius:10px;border:1px solid rgba(6,12,24,0.06);resize:vertical}
+      .chips{display:flex;flex-wrap:wrap;gap:8px}
+      .chip{padding:8px 12px;border-radius:999px;background:#fff;border:1px solid rgba(6,12,24,0.06);cursor:pointer}
+      .chip.active{background:linear-gradient(90deg,var(--accent),#60c07e);color:#fff;border:none}
+      .thumb{width:84px;height:84px;border-radius:8px;object-fit:cover;border:1px solid rgba(6,12,24,0.04)}
+      .preview{display:flex;gap:12px;align-items:center;margin-top:10px}
+      .muted{color:var(--muted);font-size:13px}
+      .map-wrap{height:460px;border-radius:10px;overflow:hidden}
+      #map{height:100%;width:100%}
+      .list{margin-top:12px;display:flex;flex-direction:column;gap:10px}
+      .item{display:flex;gap:10px;align-items:center;padding:8px;border-radius:10px;background:linear-gradient(180deg,#fff,#f8fffa)}
+      .controls{display:flex;gap:8px;align-items:center}
+      .btn{background:#fff;border:none;padding:8px 12px;border-radius:9px;cursor:pointer}
+      .primary{background:linear-gradient(90deg,var(--accent),#60c07e);color:#fff;border:none}
+      .fab{position:fixed;right:22px;bottom:22px;background:linear-gradient(90deg,var(--accent),#60c07e);width:56px;height:56px;border-radius:999px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:22px;box-shadow:0 18px 40px rgba(15,23,42,0.2);cursor:pointer}
+      .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:90px;background:#072033;color:#fff;padding:10px 14px;border-radius:10px;opacity:0;pointer-events:none;transition:all .28s}
+      .toast.show{opacity:1}
+      @media (max-width:980px){.container{grid-template-columns:1fr}.map-wrap{height:320px}}
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="brand"><div style="font-size:20px">🌿 CivicCare</div><div style="font-size:12px;color:#4b5563">Report & track local issues</div></div>
+      <div class="controls"><button class="btn" id="langBtn" aria-pressed="false">English</button><button class="btn" id="loginBtn">Login</button></div>
+    </header>
+
+    <main class="container">
+      <section class="card">
+        <h1>Report a Civic Issue</h1>
+        <p class="lead">Add a photo, pick a category, set your location and submit. This demo stores reports locally in your browser.</p>
+
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button type="button" class="btn" id="openPhotoBtn">Add Photo</button>
+          <button type="button" class="btn" id="focusDescBtn">Edit Description</button>
+        </div>
+
+        <form id="issueForm" autocomplete="off">
+          <div style="margin-top:12px">
+            <label id="photoLabel" for="photo">Photo (drag & drop supported)</label>
+            <div class="drop" id="dropArea" style="margin-top:6px;padding:10px;border-radius:10px;border:1px dashed rgba(0,0,0,0.06);display:flex;align-items:center;gap:12px;background:#fff">
+              <input id="photo" type="file" accept="image/*" capture="environment" style="display:none" />
+              <div style="flex:1">
+                <div class="muted">Drop image here or <button type="button" class="btn" id="chooseBtn">Choose file</button> <button type="button" class="btn" id="cameraBtn">Take Photo</button></div>
+                <div id="dropHint" class="muted" style="margin-top:6px">Supported: JPG/PNG. Demo only (no server upload).</div>
+              </div>
+              <img id="thumb" class="thumb" alt="preview" style="display:none" />
+            </div>
+          </div>
+
+          <div style="margin-top:12px">
+            <label id="descLabel" for="description">Description</label>
+            <textarea id="description" placeholder="What is the issue? Where is it located?" required></textarea>
+          </div>
+
+          <div style="margin-top:12px">
+            <label id="catLabel">Category</label>
+            <div class="chips" id="categoryChips">
+              <button type="button" class="chip" data-cat="garbage">🗑 Garbage</button>
+              <button type="button" class="chip" data-cat="pothole">🛑 Pothole</button>
+              <button type="button" class="chip" data-cat="water">💧 Water</button>
+              <button type="button" class="chip" data-cat="streetlight">💡 Streetlight</button>
+              <button type="button" class="chip" data-cat="drainage">🌊 Drainage</button>
+            </div>
+          </div>
+
+          <input type="hidden" id="category" />
+          <input type="hidden" id="location" />
+
+          <div class="preview" aria-live="polite">
+            <div>
+              <div id="coords" class="muted">Location: unknown</div>
+              <div id="place" class="muted">Town / State: —</div>
+              <div id="status" class="muted">Status: ready</div>
+            </div>
+          </div>
+
+          <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap">
+            <button type="button" class="btn" id="locateBtn">Use my location</button>
+            <button type="submit" class="btn primary" id="submitBtn">Submit Issue</button>
+            <button type="button" class="btn" id="exportBtn">Export JSON</button>
+            <button type="button" class="btn" id="clearBtn">Clear All</button>
+          </div>
+        </form>
+
+        <div class="list" id="recentList"></div>
+      </section>
+
+      <aside class="card">
+        <h1 id="mapHeading">Map — Reported Issues</h1>
+        <div class="map-wrap">
+          <div id="map"></div>
+        </div>
+        <p id="tipText" class="muted" style="margin-top:12px">Tip: serve this file over HTTP for geolocation to work reliably.</p>
+      </aside>
+    </main>
+
+    <div class="fab" id="fab" title="Report quickly">＋</div>
+    <div class="toast" id="toast">Saved</div>
+
+    <footer>
+      <div class="muted">Contact: support@civiccare.in</div>
+      <div class="muted"><a href="/dashboard" style="color:inherit">Transparency Dashboard</a></div>
+    </footer>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+    <script>
+      const STORAGE_KEY = 'civiccare_reports_v3';
+
+      // Map: Esri World Imagery (satellite) default, with OpenStreetMap as street layer
+      const map = L.map('map', {center:[20.5937,78.9629],zoom:5});
+      const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution:'© OpenStreetMap contributors'});
+      const esriSat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {attribution:'Tiles © Esri'});
+      esriSat.addTo(map);
+      L.control.layers({'Street': osm, 'Satellite': esriSat}, null, {collapsed:false}).addTo(map);
+
+      const markers = [];
+      function loadReports(){try{return JSON.parse(localStorage.getItem(STORAGE_KEY))||[]}catch(e){return []}}
+      function saveReports(list){localStorage.setItem(STORAGE_KEY, JSON.stringify(list))}
+      function clearMarkers(){markers.forEach(m=>map.removeLayer(m));markers.length=0}
+      function renderMap(){clearMarkers();const list=loadReports();list.forEach(r=>{if(r.lat&&r.lng){const m=L.marker([r.lat,r.lng]).addTo(map).bindPopup(`<strong>${escapeHtml(r.cat||'')}</strong><br>${escapeHtml(r.desc||'')}<br>${escapeHtml(r.place||'')}`);markers.push(m);}});if(markers.length) map.fitBounds(markers.map(m=>m.getLatLng()),{padding:[40,40]});}
+
+      function renderList(){const c=document.getElementById('recentList');c.innerHTML='';const list=loadReports();if(!list.length){c.innerHTML='<div class="muted">No reports yet.</div>';return}list.slice().reverse().forEach(r=>{const el=document.createElement('div');el.className='item';const img=document.createElement('img');img.className='thumb';img.alt='';img.src=r.thumb||'';const meta=document.createElement('div');meta.innerHTML=`<div><strong>${escapeHtml(r.cat||'—')}</strong></div><div class="muted">${escapeHtml(r.desc||'')}</div><div class="muted">${r.place?escapeHtml(r.place):'Location unknown'}</div>`;el.appendChild(img);el.appendChild(meta);c.appendChild(el);});}
+
+      function escapeHtml(s){return (s||'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;')}
+
+      // UI: category chips
+      document.querySelectorAll('.chip').forEach(ch=>ch.addEventListener('click',e=>{document.querySelectorAll('.chip').forEach(x=>x.classList.remove('active'));e.currentTarget.classList.add('active');document.getElementById('category').value=e.currentTarget.dataset.cat;}));
+
+      // Drag & drop and file chooser
+      const drop = document.getElementById('dropArea');
+  const fileInput = document.getElementById('photo');
+  const thumb = document.getElementById('thumb');
+  const chooseBtn = document.getElementById('chooseBtn');
+  const cameraBtn = document.getElementById('cameraBtn');
+  chooseBtn.addEventListener('click',()=>fileInput.click());
+  cameraBtn.addEventListener('click',()=>{ /* triggers device camera when available */ fileInput.click(); });
+  const openPhotoBtn = document.getElementById('openPhotoBtn');
+  const focusDescBtn = document.getElementById('focusDescBtn');
+  openPhotoBtn.addEventListener('click',()=>fileInput.click());
+  focusDescBtn.addEventListener('click',()=>{document.getElementById('description').focus();document.getElementById('description').scrollIntoView({behavior:'smooth',block:'center'});});
+      drop.addEventListener('dragover',e=>{e.preventDefault();drop.classList.add('dragover')});
+      drop.addEventListener('dragleave',e=>{drop.classList.remove('dragover')});
+      drop.addEventListener('drop',e=>{e.preventDefault();drop.classList.remove('dragover');const f=e.dataTransfer.files && e.dataTransfer.files[0];if(f) handleFile(f)});
+      fileInput.addEventListener('change',()=>{const f=fileInput.files && fileInput.files[0];if(f) handleFile(f)});
+  function handleFile(f){const url=URL.createObjectURL(f);thumb.src=url;thumb.style.display='block';document.getElementById('dropHint').textContent = 'Image selected';const reader=new FileReader();reader.onload=()=>{thumb.dataset.dataurl=reader.result};reader.readAsDataURL(f)}
+
+      // Reverse geocoding using Nominatim (OpenStreetMap)
+      async function reverseGeocode(lat,lng){
+        try{
+          const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}&accept-language=en`;
+          const res = await fetch(url, {headers:{'Accept':'application/json'}});
+          if(!res.ok) return null;
+          const data = await res.json();
+          const addr = data.address || {};
+          // Prefer town/city/village, fallback to county; state from addr.state
+          const town = addr.city||addr.town||addr.village||addr.hamlet||addr.county||'';
+          const state = addr.state||addr.region||addr.state_district||'';
+          const place = [town, state].filter(Boolean).join(', ');
+          return {place, town, state, raw: data};
+        }catch(e){console.warn('reverseGeocode failed',e);return null}
+      }
+
+      // Geolocation
+      document.getElementById('locateBtn').addEventListener('click',async ()=>{
+        setStatus('locating...');
+        if(!navigator.geolocation){setStatus('Geolocation not supported');return}
+        navigator.geolocation.getCurrentPosition(async p=>{
+          const lat=p.coords.latitude,lng=p.coords.longitude;
+          document.getElementById('location').value = lat+','+lng;
+          document.getElementById('coords').textContent = `Location: ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+          // reverse geocode
+          const r = await reverseGeocode(lat,lng);
+          if(r && r.place){document.getElementById('place').textContent = `Town / State: ${r.place}`;document.getElementById('status').textContent='location set';} else {document.getElementById('place').textContent='Town / State: —';document.getElementById('status').textContent='location set (no name)'}
+        },err=>{setStatus('location denied')});
+      });
+      function setStatus(t){document.getElementById('status').textContent='Status: '+t}
+
+      // Also allow clicking on the map to pick location and show town/state
+      map.on('click', async function(e){
+        const lat = e.latlng.lat, lng = e.latlng.lng;
+        document.getElementById('location').value = lat+','+lng;
+        document.getElementById('coords').textContent = `Location: ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+        setStatus('reverse geocoding...');
+        const r = await reverseGeocode(lat,lng);
+        if(r && r.place){document.getElementById('place').textContent = `Town / State: ${r.place}`;setStatus('location selected');} else {document.getElementById('place').textContent='Town / State: —';setStatus('no place found')}
+      });
+
+      // Submit
+      document.getElementById('issueForm').addEventListener('submit',async e=>{
+        e.preventDefault();
+        const desc=document.getElementById('description').value.trim();
+        const cat=document.getElementById('category').value;
+        if(!desc){toast('Please add a description');return}
+        if(!cat){toast('Please choose a category');return}
+        const loc=(document.getElementById('location').value||'').split(',');
+        const lat=parseFloat(loc[0])||null,lng=parseFloat(loc[1])||null;
+        let placeText = '';
+        if(lat && lng){
+          const r = await reverseGeocode(lat,lng);
+          placeText = (r && r.place) ? r.place : '';
+        }
+        const dataurl=thumb.dataset.dataurl||'';
+        const list=loadReports();
+        list.push({id:Date.now(),cat,desc,lat,lng,thumb:dataurl,place:placeText});
+        saveReports(list);renderList();renderMap();toast('Report saved (local demo)');
+        document.getElementById('description').value='';fileInput.value='';thumb.style.display='none';document.getElementById('place').textContent='Town / State: —';document.getElementById('coords').textContent='Location: unknown';
+      });
+
+      // Export / Clear
+      document.getElementById('clearBtn').addEventListener('click',()=>{if(!confirm('Clear all saved reports?')) return;localStorage.removeItem(STORAGE_KEY);renderList();renderMap();toast('All cleared')});
+      document.getElementById('exportBtn').addEventListener('click',()=>{const data=JSON.stringify(loadReports(),null,2);const blob=new Blob([data],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='civiccare_reports.json';document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);toast('Exported JSON')});
+
+      // Map markers & rendering
+      function renderMap(){clearMarkers();const list=loadReports();list.forEach(r=>{if(r.lat&&r.lng){const m=L.marker([r.lat,r.lng]).addTo(map).bindPopup(`<strong>${escapeHtml(r.cat||'')}</strong><br>${escapeHtml(r.desc||'')}<br>${escapeHtml(r.place||'')}`);markers.push(m);}});if(markers.length) map.fitBounds(markers.map(m=>m.getLatLng()),{padding:[40,40]});}
+
+      // Remaining UI plumbing
+      function renderList(){const c=document.getElementById('recentList');c.innerHTML='';const list=loadReports();if(!list.length){c.innerHTML='<div class="muted">No reports yet.</div>';return}list.slice().reverse().forEach(r=>{const el=document.createElement('div');el.className='item';const img=document.createElement('img');img.className='thumb';img.alt='';img.src=r.thumb||'';const meta=document.createElement('div');meta.innerHTML=`<div><strong>${escapeHtml(r.cat||'—')}</strong></div><div class="muted">${escapeHtml(r.desc||'')}</div><div class="muted">${r.place?escapeHtml(r.place):'Location unknown'}</div>`;el.appendChild(img);el.appendChild(meta);c.appendChild(el);});}
+      function escapeHtml(s){return (s||'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;')}
+
+      // Simple storage helpers
+      function loadReports(){try{return JSON.parse(localStorage.getItem(STORAGE_KEY))||[]}catch(e){return []}}
+      function saveReports(list){localStorage.setItem(STORAGE_KEY, JSON.stringify(list))}
+      function clearMarkers(){markers.forEach(m=>map.removeLayer(m));markers.length=0}
+
+      // UI: category chips
+      document.querySelectorAll('.chip').forEach(ch=>ch.addEventListener('click',e=>{document.querySelectorAll('.chip').forEach(x=>x.classList.remove('active'));e.currentTarget.classList.add('active');document.getElementById('category').value=e.currentTarget.dataset.cat;}));
+
+      // Drag & drop and file chooser
+      chooseBtn.addEventListener('click',()=>fileInput.click());
+
+      drop.addEventListener('dragover',e=>{e.preventDefault();drop.classList.add('dragover')});
+      drop.addEventListener('dragleave',e=>{drop.classList.remove('dragover')});
+      drop.addEventListener('drop',e=>{e.preventDefault();drop.classList.remove('dragover');const f=e.dataTransfer.files && e.dataTransfer.files[0];if(f) handleFile(f)});
+      fileInput.addEventListener('change',()=>{const f=fileInput.files && fileInput.files[0];if(f) handleFile(f)});
+      function handleFile(f){const url=URL.createObjectURL(f);thumb.src=url;thumb.style.display='block';const reader=new FileReader();reader.onload=()=>{thumb.dataset.dataurl=reader.result};reader.readAsDataURL(f)}
+
+      // FAB quick-scroll
+      document.getElementById('fab').addEventListener('click',()=>{document.querySelector('form').scrollIntoView({behavior:'smooth',block:'start'});document.getElementById('description').focus();});
+
+      // Toast
+      const toastEl = document.getElementById('toast');let toastTimer=null;
+      function toast(msg,ms=2000){toastEl.textContent=msg;toastEl.classList.add('show');if(toastTimer) clearTimeout(toastTimer);toastTimer=setTimeout(()=>{toastEl.classList.remove('show')},ms)}
+
+      // Language toggle (single button) English <-> Tamil (keeps UI minimal)
+      const langBtn = document.getElementById('langBtn');
+      let lang = 'en';
+      const translations = {
+        en: {
+          photoLabel: 'Photo (drag & drop supported)',
+          descPlaceholder: 'What is the issue? Where is it located?',
+          catLabel: 'Category',
+          locate: 'Use my location',
+          submit: 'Submit Issue',
+          export: 'Export JSON',
+          clear: 'Clear All',
+          mapHeading: 'Map — Reported Issues',
+          tip: 'Tip: serve this file over HTTP for geolocation to work reliably.',
+          langBtn: 'English',
+          noReports: 'No reports yet.'
+        },
+        ta: {
+          photoLabel: 'புகைப்படம் (இழுக்கு மற்றும் விட்டு விடுதல்)',
+          descPlaceholder: 'சிக்கல் என்ன? அது எங்கு உள்ளது?',
+          catLabel: 'வகை',
+          locate: 'என் இடத்தைப் பயன்படுத்தவும்',
+          submit: 'அறிக்கை சமர்ப்பி',
+          export: 'JSON ஏற்றுமதி',
+          clear: 'அனைத்தையும் நீக்கு',
+          mapHeading: 'வரைபடம் — புகாரானவை',
+          tip: 'கீற்று: Geolocation சரியாக வேலை செய்ய HTTP-ல் சேவை செய்க.',
+          langBtn: 'தமிழ்',
+          noReports: 'இன்னும் புகாருகள் இல்லை.'
+        }
+      };
+      function applyLang(){const t = translations[lang];document.getElementById('photoLabel').textContent = t.photoLabel;document.getElementById('description').placeholder = t.descPlaceholder;document.getElementById('catLabel').textContent = t.catLabel;document.getElementById('locateBtn').textContent = t.locate;document.getElementById('submitBtn').textContent = t.submit;document.getElementById('exportBtn').textContent = t.export;document.getElementById('clearBtn').textContent = t.clear;document.getElementById('mapHeading').textContent = t.mapHeading;document.getElementById('tipText').textContent = t.tip;langBtn.textContent = t.langBtn;const container = document.getElementById('recentList');if(!loadReports().length) container.innerHTML = `<div class="muted">${t.noReports}</div>`;}
+      langBtn.addEventListener('click',()=>{lang = (lang === 'en') ? 'ta' : 'en';langBtn.setAttribute('aria-pressed', lang==='ta');applyLang();});
+  
+      // Initialize
+      applyLang();renderList();renderMap();
+    </script>
+  </body>
+</html>
+ 
